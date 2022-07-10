@@ -130,7 +130,7 @@ class simulation_env():
                 m.options.IMODE = 3 #steady state optimization
                 #Solve simulation
                 m.solve(disp=False)
-                pedestrian.progress(self.dt, alpha_p1.value[0], theta.value[0])
+                pedestrian.progress(self.dt, alpha_p1.value[0], theta.value[0]+math.pi/2)
                 m.cleanup()
             else:
                 pedestrian.progress(self.dt, min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v), math.pi/2)
@@ -181,11 +181,11 @@ l=25
 b=0.25
 vmin=1.1
 vmax=1.3
-dt=0.01
+dt=0.1
 tMax=60
-phi=1500
-maxAcceleration=2 #m/s^?2
-deltaThetaMax=0 #deg
+phi=2
+maxAcceleration=2 #m/s^2
+deltaThetaMax=20 #deg
 sim=simulation_env(phi, dt, w, b, l, vmax, vmin, tMax, deltaThetaMax, maxAcceleration)
 
 # First pedestrian
