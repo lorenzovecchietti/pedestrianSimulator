@@ -84,11 +84,11 @@ class simulation_env():
         nOptions1=50
         nOptions2=360
         alphaOptions=np.linspace(alphamin, alphamax, nOptions1)
-        if pedestrian.alpha*pedestrian.v<=0.05:
+        if pedestrian.alpha*pedestrian.v<=0.5:
             thetaOptions=np.linspace(0, np.pi*3/2, nOptions2)
             sortedOptions=np.dstack(
-                np.unravel_index( np.argsort(np.abs(
-                np.outer(np.cos(thetaOptions), alphaOptions).ravel())
+                np.unravel_index( np.argsort(#np.abs(
+                np.outer(np.cos(thetaOptions), alphaOptions).ravel()#)
                 ), (nOptions2, nOptions1)))[0]
         else:
             thetaOptions=np.linspace(0, 40*np.pi/180, nOptions2)
@@ -106,7 +106,7 @@ class simulation_env():
             for theta in [thetaTest, -thetaTest]:
                 x_cand, y_cand = pedestrian.candSpost(alpha, theta+rotation, self.dt)
                 obstacle = self.checkPedestrianCollision(pedList, x_cand, y_cand, pedestrian)
-                if x_cand>=-self.w/2 and x_cand<=self.w/2 and y_cand>=-self.w/2 and y_cand<=self.w/2:
+                if x_cand>=-self.w/2-self.b and x_cand<=self.w/2+self.b and y_cand>=-self.w/2-self.b and y_cand<=self.w/2+self.b:
                     obstacle_x = self.checkPedestrianCollision(ped_in_cross, x_cand, y_cand, pedestrian)
                     obstacle=(obstacle or obstacle_x)
                 if rotation==np.pi/2:
@@ -139,13 +139,13 @@ class simulation_env():
         for listPed1, listPedX, rotation in zip([self.pedestriansCD, self.pedestriansAB], [self.pedestriansAB, self.pedestriansCD], [np.pi/2, 0]):
             ped_in_cross=[]
             for ped in listPedX:
-                if ped.x>=-self.w/2 and ped.x<=self.w/2 and ped.y>=-self.w/2 and ped.y<=self.w/2:
+                if ped.x>-self.w/2-self.b and ped.x<=self.w/2+self.b and ped.y>=-self.w/2-self.b and ped.y<=self.w/2+self.b:
                     ped_in_cross.append(ped)
             for pedestrian in listPed1:
                 alpha_candidate=min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v)
                 x_cand, y_cand=pedestrian.candSpost(alpha_candidate, rotation, self.dt)
                 obstacle = self.checkPedestrianCollision(listPed1, x_cand, y_cand, pedestrian)
-                if x_cand>=-self.w/2 and x_cand<=self.w/2 and y_cand>=-self.w/2 and y_cand<=self.w/2:
+                if x_cand>=-self.w/2-self.b and x_cand<=self.w/2+self.b and y_cand>=-self.w/2-self.b and y_cand<=self.w/2+self.b:
                     obstacle_x = self.checkPedestrianCollision(ped_in_cross, x_cand, y_cand, pedestrian)
                     obstacle=obstacle or obstacle_x
                 if not obstacle:
@@ -177,7 +177,7 @@ class simulation_env():
           xh.append(xtemp)
           yh.append(ytemp)
           vh.append(vtemp)
-        return [i.x for i in self.pedestriansAB]+[i.x for i in self.pedestriansCD], [i.y for i in self.pedestriansAB]+[i.y for i in self.pedestriansCD], [i.alpha*i.v/self.vmax for i in self.pedestriansAB]+[i.alpha*i.v/self.vmax for i in self.pedestriansCD], xh, yh, vh
+        return [i.x for i in self.pedestriansAB]+[i.x for i in self.pedestriansCD], [i.y for i in self.pedestriansAB]+[i.y for i in self.pedestriansCD], [i.alpha*i.v for i in self.pedestriansAB]+[i.alpha*i.v for i in self.pedestriansCD], xh, yh, vh
 
 ## ---------------       
 class pedestrian():
@@ -244,13 +244,6 @@ sim.addPedestrian("A", t)
 sim.addPedestrian("C", t)
 
 ## ---------------
-# Plot Domain
-matplotlib.pyplot.plot([-l/2, -w/2, -w/2], [-w/2, -w/2, -l/2], 'k')
-matplotlib.pyplot.plot([w/2, w/2, l/2], [-l/2, -w/2, -w/2], 'k')
-matplotlib.pyplot.plot([-l/2, -w/2, -w/2], [w/2, w/2, l/2], 'k')
-matplotlib.pyplot.plot([w/2, w/2, l/2], [l/2, w/2, w/2], 'k')
-
-## ---------------
 ## Solution Loops
 isave=1
 while t<=tMax:
@@ -270,15 +263,17 @@ while t<=tMax:
     xl=[]
     yl=[]
     xl, yl, colors, xlh, ylh, colorsh=sim.getLists()
+    matplotlib.pyplot.plot([-l/2, -w/2, -w/2], [-w/2, -w/2, -l/2], 'k')
+    matplotlib.pyplot.plot([w/2, w/2, l/2], [-l/2, -w/2, -w/2], 'k')
+    matplotlib.pyplot.plot([-l/2, -w/2, -w/2], [w/2, w/2, l/2], 'k')
+    matplotlib.pyplot.plot([w/2, w/2, l/2], [l/2, w/2, w/2], 'k')
     lines=[matplotlib.pyplot.plot(xlh[i], ylh[i], lw=0.2, c='k') for i in range(len(xlh))] #color=matplotlib.pyplot.cm.jet(colorsh[i])
-    scatt=matplotlib.pyplot.scatter(xl, yl, s=14, c=colors, vmin=0, vmax=1, zorder=2)
-    txt=matplotlib.pyplot.text(-sim.l/2*1.3, -sim.l/2*1.3, "t="+f'{t:.{3}f}'+" s", fontsize=12)
+    matplotlib.pyplot.scatter(xl, yl, s=14, c=colors, vmin=0, vmax=sim.vmax , zorder=2)
+    matplotlib.pyplot.text(-sim.l/2*1.3, -sim.l/2*1.3, "t="+f'{t:.{3}f}'+" s", fontsize=12)
+    matplotlib.pyplot.colorbar(label='m/s')
     matplotlib.pyplot.savefig("phi_"+str(sim.flux)+"_dt_"+str(sim.dt)+"_tmax_"+str(sim.tMax)+"/"+"{:03d}".format(isave)+".png", dpi=500)
     isave=isave+1
-    scatt.remove()
-    txt.remove()
-    for line in lines:
-        line[0].remove()
+    matplotlib.pyplot.clf()
 
 # Export remaining pedestrian
 for i in  sim.pedestriansAB:
