@@ -33,7 +33,7 @@ maxAcceleration=2 # Maximum acceleration [m/s^2]
 
 After each iteration, the code export an image containing all the pedestrians in the domain and the trajectories that they followed up until that time-step.
 
-All the images can be grouped into a video through **ffmpeg** (i.e. `ffmpeg -framerate 10 -pattern_type glob -i '*.png' -c:v libx264 -pix_fmt yuv420p outputName.mp4`)
+All the images can be grouped into a video through **ffmpeg** (i.e. `ffmpeg -framerate 10 -pattern_type glob -i '*.png' -c:v libx264 -pix_fmt yuv420p outputName.mp4`, where the framerate should be set s.t. $fr=1/\Delta t$)
 
 The additional output is a csv file that contains the tuple$(x_{position}, y_{position}, v)$ for each pedestrian in each time-step. If a pedestrian is not in the domain at one time-step, (NaN. NaN, NaN) is outputted.
 
@@ -135,4 +135,4 @@ The ordered list of combinations is evaluated until the yielding candidate posit
 Furthermore, since $\alpha\cos(\delta \theta)=\alpha\cos(-\delta \theta)$, both $\delta \theta$ and $-\delta \theta$ are evaluated. The feasible deviation that bring the pedestrian further from the wall (with respect to the position of the pedestrian at the beginning of the step) is chosen.
 
 ## Test cases
-https://raw.githubusercontent.com/wilove997/pedestrianSimulator/master/phi_2_dt_0.1_tmax_60/out.mp4
+In each folder of this repository it is possible to find different simulations results whith $\phi=[0.2 0.6 1 1.5 2]$. The images generated during the simulation, the video containing all of them and the csv file are stored in each folder.
