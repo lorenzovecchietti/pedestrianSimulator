@@ -3,7 +3,21 @@ import numpy as np
 import matplotlib.pyplot
 import os
 
-## ---------------
+## ----------------
+# Parameters
+w=5 
+l=25 
+b=0.25
+vmin=1.1
+vmax=1.3
+dt=0.1
+tMax=60
+phi=1.9
+maxAcceleration=2 #m/s^2
+
+## ----------------
+## ----------------
+## ----------------
 def distance(x,y,xx,yy):
     return np.sqrt((x-xx)**2+(y-yy)**2)
 
@@ -46,12 +60,15 @@ class simulation_env():
                 dist=(ped_pos.x-new_ped_pos[0])**2+(ped_pos.y-new_ped_pos[1])**2
                 if dist<self.b**2:
                     new_rand=True
-        vel=self.vmin+random.random()*(self.vmax-self.vmin)         #Define velocity of the new pedestrian
-        pedestrians.append(
-            pedestrian(new_ped_pos[0], new_ped_pos[1], vel, t, theta)
-            )
-        self.nPedestrian=self.nPedestrian+1
-        return
+        if not new_rand:
+            vel=self.vmin+random.random()*(self.vmax-self.vmin)         #Define velocity of the new pedestrian
+            pedestrians.append(
+                pedestrian(new_ped_pos[0], new_ped_pos[1], vel, t, theta)
+                )
+            self.nPedestrian=self.nPedestrian+1
+            return
+        else:
+            raise StopIteration
 
     def removePedestrians(self):
         for i in self.pedestriansAB:
@@ -83,14 +100,16 @@ class simulation_env():
         print("correcting traj of a pedestrian :" ,end='')
         nOptions1=50
         nOptions2=360
-        alphaOptions=np.linspace(alphamin, alphamax, nOptions1)
-        if pedestrian.alpha*pedestrian.v<=0.5:
-            thetaOptions=np.linspace(0, np.pi*3/2, nOptions2)
+        if pedestrian.alpha*pedestrian.v<=0.25:
+            alphamin=min(0, pedestrian.alpha-self.a*self.dt/pedestrian.v)
+            alphaOptions=np.linspace(alphamin, alphamax, nOptions1)
+            thetaOptions=np.linspace(0, np.pi/2, nOptions2)
             sortedOptions=np.dstack(
-                np.unravel_index( np.argsort(#np.abs(
-                np.outer(np.cos(thetaOptions), alphaOptions).ravel()#)
-                ), (nOptions2, nOptions1)))[0]
+                np.unravel_index( np.argsort(
+                np.outer(np.cos(thetaOptions), np.abs(alphaOptions)).ravel()),
+                (nOptions2, nOptions1)))[0]
         else:
+            alphaOptions=np.linspace(alphamin, alphamax, nOptions1)
             thetaOptions=np.linspace(0, 40*np.pi/180, nOptions2)
             sortedOptions=np.dstack(
                 np.unravel_index( np.argsort(
@@ -151,7 +170,7 @@ class simulation_env():
                 if not obstacle:
                     pedestrian.progress(self.dt, alpha_candidate, rotation)
                 else:
-                    alphamin=0#max(0,pedestrian.alpha-self.a*self.dt/pedestrian.v)
+                    alphamin=0
                     alphamax=min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v)
                     self.choosePath(pedestrian, listPed1, ped_in_cross, alphamin, alphamax, rotation)
 
@@ -219,16 +238,6 @@ class pedestrian():
 
 ## ---------------
 ## Initialize
-w=5 
-l=25 
-b=0.25
-vmin=1.1
-vmax=1.3
-dt=0.1
-tMax=60
-phi=2
-maxAcceleration=2 #m/s^2
-
 try:
     os.mkdir("phi_"+str(phi)+"_dt_"+str(dt)+"_tmax_"+str(tMax))
 except:
