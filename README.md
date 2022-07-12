@@ -125,7 +125,9 @@ $\alpha_{\max}$ is defined as before, $\alpha_{\min}=0$ since the pedestrian mus
 
 $\mathbf{\delta \theta_{list}}$ starts from 0 because, for each $\delta \theta$, both $\delta \theta$ and $-\delta \theta$ are evaluated.
 
-The pawn can move based on any of the combinations of the two lists. Then, the combination matrix is constructed and sorted based on the combinations that maximize $\alpha\cos(\delta \theta)$ (hence that maximise the movement of the pedestrian towards the outlet). In the case of $\alpha v <=0.25\ m/s$, since backing off slightly is to be preferred  over staying stationary, the absolute value of $\alpha$ is considered.
+Lists are generated with evenly spaced elements such that `len(alpha_list)=180` and `len(theta_list)=50`. This was chosen arbitrarily by seeking a compromise between code speed and precision in finding the optimal movement.
+
+The pedestrian can move based on any of the combinations of the two lists. Then, the combination matrix is constructed and sorted based on the combinations that maximize $\alpha\cos(\delta \theta)$ (hence that maximise the movement of the pedestrian towards the outlet). In the case of $\alpha v <=0.25\ m/s$, since backing off slightly is to be preferred  over staying stationary, the absolute value of $\alpha$ is considered.
 
 The ordered list of combinations is evaluated until the yielding candidate position:
 

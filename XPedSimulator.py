@@ -63,19 +63,18 @@ class simulation_env():
         if not new_rand:
             vel=self.vmin+random.random()*(self.vmax-self.vmin)         #Define velocity of the new pedestrian
             pedestrians.append(
-                pedestrian(new_ped_pos[0], new_ped_pos[1], vel, t, theta)
-                )
+                pedestrian(new_ped_pos[0], new_ped_pos[1], vel, t, theta)  )
             self.nPedestrian=self.nPedestrian+1
             return
         else:
-            raise StopIteration
+            raise StopIteration # Not enough space to introduce a new pedestrian
 
     def removePedestrians(self):
         for i in self.pedestriansAB:
-            if i.x>l/2:
-                i.writeTraj(self.outcsv, "AB", self.dt, self.tMax)
-                self.pedestriansAB.remove(i)
-                self.nPedestrian=self.nPedestrian-1
+            if i.x>l/2:                                             # if outside the domain
+                i.writeTraj(self.outcsv, "AB", self.dt, self.tMax)  # write to csv output
+                self.pedestriansAB.remove(i)                        # remove from pedestrian list
+                self.nPedestrian=self.nPedestrian-1                 # decrease number of pedestrian in the simulation
         for i in self.pedestriansCD:
             if i.y>l/2:
                 i.writeTraj(self.outcsv, "CD", self.dt, self.tMax)
@@ -99,11 +98,12 @@ class simulation_env():
     def choosePath(self, pedestrian, pedList, ped_in_cross, alphamin, alphamax, rotation):
         print("correcting traj of a pedestrian :" ,end='')
         nOptions1=50
-        nOptions2=360
-        if pedestrian.alpha*pedestrian.v<=0.25:
-            alphamin=min(0, pedestrian.alpha-self.a*self.dt/pedestrian.v)
+        nOptions2=180
+        if pedestrian.alpha*pedestrian.v<=0.25:                             # if low velocity -> more freedom
+            alphamin=min(0, pedestrian.alpha-self.a*self.dt/pedestrian.v)   #alpha can become negative
             alphaOptions=np.linspace(alphamin, alphamax, nOptions1)
             thetaOptions=np.linspace(0, np.pi/2, nOptions2)
+            # sortedOptions contains a list of indexes [i, j]  s.t. alphaOptions[j]*thetaOptions(theta[i]) is a sorted list
             sortedOptions=np.dstack(
                 np.unravel_index( np.argsort(
                 np.outer(np.cos(thetaOptions), np.abs(alphaOptions)).ravel()),
@@ -137,6 +137,7 @@ class simulation_env():
                 obstacleVect.append(obstacle)
                 closerVect.append(closer)
 
+            # Choose option further from the wall
             if False in obstacleVect:
                 obstacle=False
                 if not closerVect[1] and not obstacleVect[1]:
@@ -157,15 +158,15 @@ class simulation_env():
     def movePedestrians(self):
         for listPed1, listPedX, rotation in zip([self.pedestriansCD, self.pedestriansAB], [self.pedestriansAB, self.pedestriansCD], [np.pi/2, 0]):
             ped_in_cross=[]
-            for ped in listPedX:
+            for ped in listPedX: # create list of pedestrians moving through the other path and currently at the intersection
                 if ped.x>-self.w/2-self.b and ped.x<=self.w/2+self.b and ped.y>=-self.w/2-self.b and ped.y<=self.w/2+self.b:
                     ped_in_cross.append(ped)
             for pedestrian in listPed1:
                 alpha_candidate=min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v)
                 x_cand, y_cand=pedestrian.candSpost(alpha_candidate, rotation, self.dt)
-                obstacle = self.checkPedestrianCollision(listPed1, x_cand, y_cand, pedestrian)
+                obstacle = self.checkPedestrianCollision(listPed1, x_cand, y_cand, pedestrian) # check collision with other pedestrians 
                 if x_cand>=-self.w/2-self.b and x_cand<=self.w/2+self.b and y_cand>=-self.w/2-self.b and y_cand<=self.w/2+self.b:
-                    obstacle_x = self.checkPedestrianCollision(ped_in_cross, x_cand, y_cand, pedestrian)
+                    obstacle_x = self.checkPedestrianCollision(ped_in_cross, x_cand, y_cand, pedestrian)  # check collision with other pedestrians moving through the other path and currently at the intersection
                     obstacle=obstacle or obstacle_x
                 if not obstacle:
                     pedestrian.progress(self.dt, alpha_candidate, rotation)
@@ -174,7 +175,7 @@ class simulation_env():
                     alphamax=min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v)
                     self.choosePath(pedestrian, listPed1, ped_in_cross, alphamin, alphamax, rotation)
 
-    def getLists(self):
+    def getLists(self): # get list to ease plotting in the loop
         xh=[]
         yh=[]
         vh=[]
@@ -220,7 +221,7 @@ class pedestrian():
         self.history.append((self.x, self.y, self.v*self.alpha))
         return
     
-    def writeTraj(self, filename, path, dt, tMax):
+    def writeTraj(self, filename, path, dt, tMax): # write traj to csv file
         filename.write(path)
         decprecision=5
         tend=len(self.history)*dt+self.tin
