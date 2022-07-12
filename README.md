@@ -135,4 +135,4 @@ The ordered list of combinations is evaluated until the yielding candidate posit
 Furthermore, since $\alpha\cos(\delta \theta)=\alpha\cos(-\delta \theta)$, both $\delta \theta$ and $-\delta \theta$ are evaluated. The feasible deviation that bring the pedestrian further from the wall (with respect to the position of the pedestrian at the beginning of the step) is chosen.
 
 ## Test cases
-In each folder of this repository it is possible to find different simulations results whith $\phi=[0.2 \ 0.6 \ 1 \ 1.5 \ 2]$. The images generated during the simulation, the video containing all of them and the csv file are stored in each folder.
+In each folder of this repository it is possible to find different simulations results with $\phi=[0.2, \ 0.6, \ 1, \ 1.5, \ 2]$. The images generated during the simulation, the video containing all of them and the csv file are stored in each folder.
