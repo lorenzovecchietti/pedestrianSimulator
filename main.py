@@ -1,33 +1,15 @@
 import random
-import math
-from gekko import GEKKO
+import numpy as np
 import matplotlib.pyplot
+import os
 
+## ---------------
 def distance(x,y,xx,yy):
-    return math.sqrt((x-xx)**2+(y-yy)**2)
-def tangents(x1, y1, x2, y2, r):
-    dx, dy = x1-x2, y1-y2
-    dxr, dyr = -dy, dx
-    d = math.sqrt(dx**2+dy**2)
-    if d >= r :
-        rho = r/d
-        ad = rho**2
-        bd = rho*math.sqrt(1-rho**2)
-        T1x = x2 + ad*dx + bd*dxr
-        T1y = y2 + ad*dy + bd*dyr
-        T2x = x2 + ad*dx - bd*dxr
-        T2y = y2 + ad*dy - bd*dyr
-        if (d/r-1) < 1E-8:
-            print('Point on circumference\n')
-            return False, 0, 0
-        else:
-            return True, math.atan2(T1y-y1, T1x-x1), math.atan2(T2y-y1, T2x-x1)
-    else:
-        print('Point P is inside the circle. No tangent is possible...\n')
+    return np.sqrt((x-xx)**2+(y-yy)**2)
 
-
+## ---------------
 class simulation_env():
-    def __init__(self, phi, dt, w, b, l, vmax, vmin, tMax, deltaThetaMax, maxAcceleration):
+    def __init__(self, phi, dt, w, b, l, vmax, vmin, tMax, maxAcceleration):
         self.flux = phi # pedestrian flux [ped/s]
         self.dt = dt # timestep [s]
         self.pedestriansAB = [] # list of pedestrians walking from A to B
@@ -39,9 +21,8 @@ class simulation_env():
         self.vmin=vmin # vmin [m/s]
         self.tMax=tMax
         self.nPedestrian=0
-        self.dtheta=deltaThetaMax*math.pi/180/2 #rad
         self.a=maxAcceleration #m/s^2
-        self.outcsv=open("pedestrian_"+str(phi)+".csv", "w", buffering=1)
+        self.outcsv=open("phi_"+str(self.flux)+"_dt_"+str(self.dt)+"_tmax_"+str(self.tMax)+"/"+"pedestrian_"+str(phi)+".csv", "w", buffering=1)
         # Initialize output file
         self.outcsv.write("Path,Individual")
         for i in range(0, int(tMax/dt)):
@@ -59,7 +40,7 @@ class simulation_env():
             if inlet=="C":
                 new_ped_pos=(ch_pos, -self.l/2)
                 pedestrians=self.pedestriansCD
-                theta=math.pi/2
+                theta=np.pi/2
             new_rand=False
             for ped_pos in pedestrians: # Check overlapping of new pedestrian with existing ones
                 dist=(ped_pos.x-new_ped_pos[0])**2+(ped_pos.y-new_ped_pos[1])**2
@@ -67,7 +48,7 @@ class simulation_env():
                     new_rand=True
         vel=self.vmin+random.random()*(self.vmax-self.vmin)         #Define velocity of the new pedestrian
         pedestrians.append(
-            pedestrian(new_ped_pos[0], new_ped_pos[1], vel, theta, t)
+            pedestrian(new_ped_pos[0], new_ped_pos[1], vel, t, theta)
             )
         self.nPedestrian=self.nPedestrian+1
         return
@@ -85,76 +66,138 @@ class simulation_env():
                 self.nPedestrian=self.nPedestrian-1
         return
     
+    def checkPedestrianCollision(self, pedestrianList, x_cand, y_cand, pedestrian):
+        obstacle=False
+        for ped_i in pedestrianList:
+            if (not ped_i==pedestrian) and distance(x_cand, y_cand, ped_i.x, ped_i.y)<=2*self.b:
+                obstacle=True
+        return obstacle
+
+    def checkWalls(self, pedestrian, x_cand, y_cand, x_wall, y_wall, wall):
+        if wall=="y":
+            return abs(y_cand)>=y_wall-self.b, abs(pedestrian.y)<=abs(y_cand)
+        if wall=="x":
+            return abs(x_cand)>=x_wall-self.b, abs(pedestrian.x)<=abs(x_cand)
+
+    def choosePath(self, pedestrian, pedList, ped_in_cross, alphamin, alphamax, rotation):
+        print("correcting traj of a pedestrian :" ,end='')
+        nOptions1=50
+        nOptions2=360
+        alphaOptions=np.linspace(alphamin, alphamax, nOptions1)
+        if pedestrian.alpha*pedestrian.v<=0.05:
+            thetaOptions=np.linspace(0, np.pi*3/2, nOptions2)
+            sortedOptions=np.dstack(
+                np.unravel_index( np.argsort(np.abs(
+                np.outer(np.cos(thetaOptions), alphaOptions).ravel())
+                ), (nOptions2, nOptions1)))[0]
+        else:
+            thetaOptions=np.linspace(0, 40*np.pi/180, nOptions2)
+            sortedOptions=np.dstack(
+                np.unravel_index( np.argsort(
+                np.outer(np.cos(thetaOptions), alphaOptions).ravel()),
+                (nOptions2, nOptions1)))[0]
+        for iii in range(1, len(sortedOptions)+1):
+            i, j = sortedOptions[-iii][0], sortedOptions[-iii][1] 
+            thetaTest=thetaOptions[i]
+            alpha=float(alphaOptions[j])
+
+            obstacleVect=[]
+            closerVect=[]
+            for theta in [thetaTest, -thetaTest]:
+                x_cand, y_cand = pedestrian.candSpost(alpha, theta+rotation, self.dt)
+                obstacle = self.checkPedestrianCollision(pedList, x_cand, y_cand, pedestrian)
+                if x_cand>=-self.w/2 and x_cand<=self.w/2 and y_cand>=-self.w/2 and y_cand<=self.w/2:
+                    obstacle_x = self.checkPedestrianCollision(ped_in_cross, x_cand, y_cand, pedestrian)
+                    obstacle=(obstacle or obstacle_x)
+                if rotation==np.pi/2:
+                    wall="x"
+                else:
+                    wall="y"
+                obstacle_w, closer=self.checkWalls(pedestrian, x_cand, y_cand, self.w/2, self.w/2, wall)
+                obstacle=(obstacle or obstacle_w)
+                obstacleVect.append(obstacle)
+                closerVect.append(closer)
+
+            if False in obstacleVect:
+                obstacle=False
+                if not closerVect[1] and not obstacleVect[1]:
+                    theta=-thetaTest
+                elif not closerVect[0] and not obstacleVect[0]:
+                    theta=thetaTest
+                elif not obstacleVect[1]:
+                    theta=-thetaTest
+                elif not obstacleVect[0]:
+                    theta=thetaTest
+
+            if not obstacle:
+                pedestrian.progress(self.dt, alpha, theta+rotation)
+                print(alpha, theta*180/np.pi)
+                return
+        raise StopIteration
+
     def movePedestrians(self):
-        for pedestrian in self.pedestriansCD:
-            print("x", end='', flush=True)
-            #check wall
-            dx=pedestrian.v*self.dt*math.sin(self.dtheta)*(pedestrian.alpha+self.a*self.dt/pedestrian.v)
-            rightwall=(dx+pedestrian.x>=-self.b+self.w/2)
-            leftwall=(-dx+pedestrian.x<=self.b-self.w/2)
-
-            ped_in_candidatespace=[]
-            #check other pedestrians in CD
-            for ped_i in self.pedestriansCD:
-                if (not ped_i==pedestrian) and distance(ped_i.x, ped_i.y, pedestrian.x, pedestrian.y)-2*self.b>=pedestrian.v*self.dt:
-                    tangentsBool, th1, th2 = tangents(pedestrian.x, pedestrian.y, ped_i.x, ped_i.y, 2*self.b)
-                    th1=th1-math.pi/2
-                    th2=th2-math.pi/2
-                    if abs(th1)<self.dtheta/2 and abs(th2)<self.dtheta/2:
-                        ped_in_candidatespace.append(ped_i)
-            
-            if pedestrian.y>=-w and pedestrian.y<=w:
-                for ped_j in self.pedestriansAB:
-                    if ped_j.y>=-w and ped_j.y<=w:
-                        ped_in_candidatespace.append(ped_j)
-            
-            if ped_in_candidatespace or rightwall or leftwall:
-                m = GEKKO()
-                alpha_p1,theta = [m.Var(lb=max(0,pedestrian.alpha-self.a*self.dt/pedestrian.v), ub=min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v)), m.Var(lb=-self.dtheta/2, ub=self.dtheta/2)]
-                alpha_p1.value = pedestrian.alpha
-                theta.value = 0
-                #Equations
-                if leftwall:
-                    m.Equation(-alpha_p1*pedestrian.v*self.dt*m.sin(theta)+pedestrian.x-2*self.b>=-self.w/2)
-                if rightwall:
-                    m.Equation(alpha_p1*pedestrian.v*self.dt*m.sin(theta)+pedestrian.x+2*self.b<=self.w/2)
-
-                for ped_i in ped_in_candidatespace:
-                    m.Equation((pedestrian.x+alpha_p1*pedestrian.v*self.dt*m.sin(theta)-ped_i.x)**2+
-                                (pedestrian.y+alpha_p1*pedestrian.v*self.dt*m.cos(theta)-ped_i.y)**2>=4*(self.b)**2)
-
-                #Objective
-                m.Minimize(m.abs2(theta)-alpha_p1)
-
-                #Set global options
-                m.options.IMODE = 3 #steady state optimization
-                #Solve simulation
-                m.solve(disp=False)
-                pedestrian.progress(self.dt, alpha_p1.value[0], theta.value[0]+math.pi/2)
-                m.cleanup()
-            else:
-                pedestrian.progress(self.dt, min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v), math.pi/2)
-
-        print("\n")
+        for listPed1, listPedX, rotation in zip([self.pedestriansCD, self.pedestriansAB], [self.pedestriansAB, self.pedestriansCD], [np.pi/2, 0]):
+            ped_in_cross=[]
+            for ped in listPedX:
+                if ped.x>=-self.w/2 and ped.x<=self.w/2 and ped.y>=-self.w/2 and ped.y<=self.w/2:
+                    ped_in_cross.append(ped)
+            for pedestrian in listPed1:
+                alpha_candidate=min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v)
+                x_cand, y_cand=pedestrian.candSpost(alpha_candidate, rotation, self.dt)
+                obstacle = self.checkPedestrianCollision(listPed1, x_cand, y_cand, pedestrian)
+                if x_cand>=-self.w/2 and x_cand<=self.w/2 and y_cand>=-self.w/2 and y_cand<=self.w/2:
+                    obstacle_x = self.checkPedestrianCollision(ped_in_cross, x_cand, y_cand, pedestrian)
+                    obstacle=obstacle or obstacle_x
+                if not obstacle:
+                    pedestrian.progress(self.dt, alpha_candidate, rotation)
+                else:
+                    alphamin=0#max(0,pedestrian.alpha-self.a*self.dt/pedestrian.v)
+                    alphamax=min(1, pedestrian.alpha+self.a*self.dt/pedestrian.v)
+                    self.choosePath(pedestrian, listPed1, ped_in_cross, alphamin, alphamax, rotation)
 
     def getLists(self):
-        return [i.x for i in self.pedestriansCD], [i.y for i in self.pedestriansCD]
-            
+        xh=[]
+        yh=[]
+        vh=[]
+        for i in self.pedestriansAB:
+          xtemp, ytemp, vtemp=[], [], []
+          for j in i.history:
+            xtemp.append(j[0])
+            ytemp.append(j[1])
+            vtemp.append(j[2]/self.vmax)
+          xh.append(xtemp)
+          yh.append(ytemp)
+          vh.append(vtemp)
+        for i in self.pedestriansCD:
+          xtemp, ytemp, vtemp=[], [], []
+          for j in i.history:
+            xtemp.append(j[0])
+            ytemp.append(j[1])
+            vtemp.append(j[2]/self.vmax)
+          xh.append(xtemp)
+          yh.append(ytemp)
+          vh.append(vtemp)
+        return [i.x for i in self.pedestriansAB]+[i.x for i in self.pedestriansCD], [i.y for i in self.pedestriansAB]+[i.y for i in self.pedestriansCD], [i.alpha*i.v/self.vmax for i in self.pedestriansAB]+[i.alpha*i.v/self.vmax for i in self.pedestriansCD], xh, yh, vh
+
+## ---------------       
 class pedestrian():
-    def __init__(self, x, y, v, theta, tin):
+    def __init__(self, x, y, v, tin, theta):
         self.x = x
         self.y = y
         self.v = v
-        self.theta = theta
         self.alpha = 1
         self.history = []
         self.tin = tin
+        self.theta=theta
+
+    def candSpost(self, alpha_candidate, theta_candidate, dt):
+        return self.x+alpha_candidate*self.v*dt*np.cos(theta_candidate), self.y+alpha_candidate*self.v*dt*np.sin(theta_candidate)
 
     def progress(self, dt, alpha, theta):
         self.alpha=alpha
         self.theta=theta
-        self.x=self.x+self.v*math.cos(self.theta)*dt*self.alpha
-        self.y=self.y+self.v*math.sin(self.theta)*dt*self.alpha
+        self.x=self.x+self.v*np.cos(theta)*dt*self.alpha
+        self.y=self.y+self.v*np.sin(theta)*dt*self.alpha
         self.history.append((self.x, self.y, self.v*self.alpha))
         return
     
@@ -185,40 +228,59 @@ dt=0.1
 tMax=60
 phi=2
 maxAcceleration=2 #m/s^2
-deltaThetaMax=20 #deg
-sim=simulation_env(phi, dt, w, b, l, vmax, vmin, tMax, deltaThetaMax, maxAcceleration)
 
-# First pedestrian
+try:
+    os.mkdir("phi_"+str(phi)+"_dt_"+str(dt)+"_tmax_"+str(tMax))
+except:
+    pass
+
+sim=simulation_env(phi, dt, w, b, l, vmax, vmin, tMax, maxAcceleration)
+
+## ---------------
+# First pedestrians
 t=0
 tAdd=0
-#sim.addPedestrian("A", t)
+sim.addPedestrian("A", t)
 sim.addPedestrian("C", t)
 
 ## ---------------
+# Plot Domain
+matplotlib.pyplot.plot([-l/2, -w/2, -w/2], [-w/2, -w/2, -l/2], 'k')
+matplotlib.pyplot.plot([w/2, w/2, l/2], [-l/2, -w/2, -w/2], 'k')
+matplotlib.pyplot.plot([-l/2, -w/2, -w/2], [w/2, w/2, l/2], 'k')
+matplotlib.pyplot.plot([w/2, w/2, l/2], [l/2, w/2, w/2], 'k')
+
+## ---------------
 ## Solution Loops
+isave=1
 while t<=tMax:
+    # Add pedestrians
     if t-tAdd >= 1/phi:
-    #    sim.addPedestrian("A", t)
+        sim.addPedestrian("A", t)
         sim.addPedestrian("C", t)
         tAdd=t
-
-    print("Time", t, "\t\t\tNumber of pedestrians:",  sim.nPedestrian)
-
+    print("Time", f'{t:.{3}f}', "\tNumber of pedestrians:",  sim.nPedestrian)
     # Move forward
     sim.movePedestrians()
-
+    # Rempve pedestrian outside domain
     sim.removePedestrians()
     t=t+dt
 
+    # Plot timestep
     xl=[]
     yl=[]
-    xl, yl=sim.getLists()
-    matplotlib.pyplot.plot([-w/2, -w/2], [-l/2, l/2], 'k')
-    matplotlib.pyplot.plot([w/2, w/2], [-l/2, l/2], 'k')
-    matplotlib.pyplot.scatter(xl, yl, s=0.5)
-    matplotlib.pyplot.savefig(str(t)+".png")
-    matplotlib.pyplot.clf()
+    xl, yl, colors, xlh, ylh, colorsh=sim.getLists()
+    lines=[matplotlib.pyplot.plot(xlh[i], ylh[i], lw=0.2, c='k') for i in range(len(xlh))] #color=matplotlib.pyplot.cm.jet(colorsh[i])
+    scatt=matplotlib.pyplot.scatter(xl, yl, s=14, c=colors, vmin=0, vmax=1, zorder=2)
+    txt=matplotlib.pyplot.text(-sim.l/2*1.3, -sim.l/2*1.3, "t="+f'{t:.{3}f}'+" s", fontsize=12)
+    matplotlib.pyplot.savefig("phi_"+str(sim.flux)+"_dt_"+str(sim.dt)+"_tmax_"+str(sim.tMax)+"/"+"{:03d}".format(isave)+".png", dpi=500)
+    isave=isave+1
+    scatt.remove()
+    txt.remove()
+    for line in lines:
+        line[0].remove()
 
+# Export remaining pedestrian
 for i in  sim.pedestriansAB:
     i.writeTraj(sim.outcsv, "AB", sim.dt, sim.tMax)
 for i in  sim.pedestriansCD:
