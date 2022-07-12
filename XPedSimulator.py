@@ -50,7 +50,7 @@ class simulation_env():
             if inlet=="A":
                 new_ped_pos=(-self.l/2, ch_pos)
                 pedestrians=self.pedestriansAB
-                theta=0
+                theta=0 
             if inlet=="C":
                 new_ped_pos=(ch_pos, -self.l/2)
                 pedestrians=self.pedestriansCD
